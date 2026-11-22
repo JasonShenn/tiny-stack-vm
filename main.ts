@@ -4,17 +4,22 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// Named limits (values unchanged from the original magic numbers).
+const MAX_STEPS = 1000000;
+const STACK_CAP = 256;
+const OUT_CAP = 65536;
+
 function run(p: Uint8Array, q: Uint8Array): { o: Uint8Array; c: number } {
-  const D = new Int32Array(256), C = new Int32Array(64), M = new Int32Array(256);
-  const O = new Uint8Array(65536);
+  const D = new Int32Array(STACK_CAP), C = new Int32Array(64), M = new Int32Array(STACK_CAP);
+  const O = new Uint8Array(OUT_CAP);
   let sp = 0, cp = 0, ol = 0, ip = 0, pc = 0, st = 0, tc = 0;
   const trap = (c: number) => ({ o: O.slice(0, ol), c });
   const chk = (a: number, b: number): boolean => {
-    tc = sp < a ? 2 : sp - a + b > 256 ? 3 : 0;
+    tc = sp < a ? 2 : sp - a + b > STACK_CAP ? 3 : 0;
     return tc !== 0;
   };
   for (;;) {
-    if (st === 1000000) return trap(10);
+    if (st === MAX_STEPS) return trap(10);
     if (pc < 0 || pc >= p.length) return trap(9);
     const op = p[pc];
     const ok = op <= 7 || (op >= 0x10 && op <= 0x22) || (op >= 0x30 && op <= 0x34)
@@ -134,14 +139,14 @@ function run(p: Uint8Array, q: Uint8Array): { o: Uint8Array; c: number } {
       case 0x50: {
         if (chk(1, 0)) return trap(tc);
         const t = String(D[sp - 1]);
-        if (ol + t.length > 65536) return trap(11);
+        if (ol + t.length > OUT_CAP) return trap(11);
         sp--;
         for (let i = 0; i < t.length; i++) O[ol++] = t.charCodeAt(i);
         break;
       }
       case 0x51:
         if (chk(1, 0)) return trap(tc);
-        if (ol + 1 > 65536) return trap(11);
+        if (ol + 1 > OUT_CAP) return trap(11);
         O[ol++] = D[--sp] & 255;
         break;
       case 0x52:
